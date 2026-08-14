@@ -1,3 +1,14 @@
+---
+title: PII Redaction Tool & Evaluation Suite
+emoji: 🔒
+colorFrom: indigo
+colorTo: cyan
+sdk: docker
+app_port: 7860
+pinned: false
+license: mit
+---
+
 # PII Redaction Tool & Evaluation Suite
 
 A Python-based solution for automatically detecting, anonymizing, and redacting Personally Identifiable Information (PII) from `.docx` documents and text files while maintaining original document formatting and consistent entity mapping.
