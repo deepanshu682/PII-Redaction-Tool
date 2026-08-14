@@ -30,11 +30,15 @@ class PIIRedactor:
     def __init__(self, mode: str = "SYNTHETIC"):
         self.mode = mode
         try:
-            self.nlp = spacy.load("en_core_web_sm")
+            import en_core_web_sm
+            self.nlp = en_core_web_sm.load(disable=["parser", "tagger", "lemmatizer"])
         except Exception:
-            import spacy.cli
-            spacy.cli.download("en_core_web_sm")
-            self.nlp = spacy.load("en_core_web_sm")
+            try:
+                self.nlp = spacy.load("en_core_web_sm", disable=["parser", "tagger", "lemmatizer"])
+            except Exception:
+                import spacy.cli
+                spacy.cli.download("en_core_web_sm")
+                self.nlp = spacy.load("en_core_web_sm", disable=["parser", "tagger", "lemmatizer"])
         
         # Configure Presidio
         configuration = {
