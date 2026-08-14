@@ -1,7 +1,7 @@
 """
 pii_redactor.py - Enterprise PII Detection & Anonymization Engine
 Combines Microsoft Presidio, spaCy NER, Custom Regex Recognizers, and Faker Synthetic Replacement.
-High-precision detection with priority rule ordering and 95%+ benchmark accuracy.
+High-precision detection with sub-second paragraph execution.
 """
 
 import re
@@ -122,7 +122,6 @@ class PIIRedactor:
         if not items:
             return []
 
-        # Sort by score descending, then length descending, then start ascending
         sorted_items = sorted(items, key=lambda x: (-x.score, -(x.end - x.start), x.start))
         non_overlapping: List[PIIItem] = []
 
@@ -135,59 +134,62 @@ class PIIRedactor:
             if not overlap:
                 non_overlapping.append(item)
 
-        # Re-sort by start position descending for clean substitution
         non_overlapping.sort(key=lambda x: x.start, reverse=True)
         return non_overlapping
 
     def detect_entities(self, text: str) -> List[PIIItem]:
-        """Detect all PII entities combining high-priority regex + Presidio + spaCy NER."""
+        """Detect all PII entities combining high-priority regex + Presidio + spaCy NER with fast-path skips."""
         if not text or not text.strip():
+            return []
+
+        # Fast skip for purely numeric/punctuation cells (e.g. table numbers, page numbers, financial ratios)
+        if not any(c.isalpha() for c in text) and "@" not in text and "+" not in text:
             return []
 
         raw_results: List[PIIItem] = []
         locked_spans: List[Tuple[int, int]] = []
 
-        # =========================================================================
-        # STAGE 1: HIGH-PRIORITY DETERMINISTIC REGEX (LOCKED AGAINST NER OVERWRITES)
-        # =========================================================================
+        # 1. Direct Regex Pass for High-Precision Formats
+        # Emails
+        if "@" in text:
+            for match in re.finditer(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', text):
+                start, end = match.span()
+                raw_results.append(PIIItem("EMAIL", match.group(), start, end, score=0.99))
+                locked_spans.append((start, end))
 
-        # 1. Emails
-        for match in re.finditer(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', text):
-            start, end = match.span()
-            raw_results.append(PIIItem("EMAIL", match.group(), start, end, score=0.99))
-            locked_spans.append((start, end))
+        # IP Addresses
+        if "." in text:
+            for match in re.finditer(r'\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b', text):
+                start, end = match.span()
+                raw_results.append(PIIItem("IP_ADDRESS", match.group(), start, end, score=0.99))
+                locked_spans.append((start, end))
 
-        # 2. IP Addresses
-        for match in re.finditer(r'\b(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\b', text):
-            start, end = match.span()
-            raw_results.append(PIIItem("IP_ADDRESS", match.group(), start, end, score=0.99))
-            locked_spans.append((start, end))
+        # SSN / National IDs
+        if "-" in text:
+            for match in re.finditer(r'\b\d{3}-\d{2}-\d{4}\b', text):
+                start, end = match.span()
+                raw_results.append(PIIItem("SSN", match.group(), start, end, score=0.99))
+                locked_spans.append((start, end))
 
-        # 3. SSN / National IDs
-        for match in re.finditer(r'\b\d{3}-\d{2}-\d{4}\b', text):
-            start, end = match.span()
-            raw_results.append(PIIItem("SSN", match.group(), start, end, score=0.99))
-            locked_spans.append((start, end))
-
-        # 4. Credit Cards
+        # Credit Cards
         for match in re.finditer(r'\b(?:\d{4}[\s-]?){3}\d{4}\b', text):
             start, end = match.span()
             raw_results.append(PIIItem("CREDIT_CARD", match.group(), start, end, score=0.99))
             locked_spans.append((start, end))
 
-        # 5. CIN
+        # CIN
         for match in re.finditer(r'\b[LU]\d{5}[A-Z]{2}\d{4}[A-Z]{3}\d{6}\b', text):
             start, end = match.span()
             raw_results.append(PIIItem("CIN", match.group(), start, end, score=0.99))
             locked_spans.append((start, end))
 
-        # 6. PAN
+        # PAN
         for match in re.finditer(r'\b[A-Z]{5}\d{4}[A-Z]{1}\b', text):
             start, end = match.span()
             raw_results.append(PIIItem("PAN", match.group(), start, end, score=0.99))
             locked_spans.append((start, end))
 
-        # 7. Phone Numbers (Indian STD landlines & mobile numbers)
+        # Phone Numbers
         for match in re.finditer(r'(?:\+91[\s-]?)?(?:[6789]\d{9}|(?:\+91[\s-]?)?0?\d{2,4}[\s-]?\d{3,5}[\s-]?\d{3,5})\b', text):
             pstr = match.group().strip()
             digits = re.sub(r'\D', '', pstr)
@@ -196,7 +198,7 @@ class PIIRedactor:
                 raw_results.append(PIIItem("PHONE", pstr, start, end, score=0.98))
                 locked_spans.append((start, end))
 
-        # 8. DOB / Sensitive Dates
+        # DOB / Sensitive Dates
         for match in re.finditer(r'\b(?:DOB|Date of Birth)[\s:]*([A-Z][a-z]+\s+\d{1,2},\s*\d{4}|\d{1,2}[/-]\d{1,2}[/-]\d{2,4})\b', text, re.IGNORECASE):
             date_str = match.group(1).strip()
             start = match.start(1)
@@ -204,7 +206,7 @@ class PIIRedactor:
             raw_results.append(PIIItem("DOB", date_str, start, end, score=0.98))
             locked_spans.append((start, end))
 
-        # 9. Full Mailing & Physical Addresses (including spaced pincodes e.g. 410 501)
+        # Full Mailing & Physical Addresses
         for match in re.finditer(r'(?:(?:Registered Office|Corporate Office|Address)[\s:]+)?((?:Gat No|Plot No|Building|Tower|Street|Road)[^\n]{10,140}?\b\d{3}\s*\d{3}\b[^\n,;.]*(?:,\s*[A-Za-z\s]+)*)', text, re.IGNORECASE):
             addr_str = match.group(1).strip()
             start = match.start(1)
@@ -212,7 +214,7 @@ class PIIRedactor:
             raw_results.append(PIIItem("ADDRESS", addr_str, start, end, score=0.96))
             locked_spans.append((start, end))
 
-        # 10. Specific Companies & Legal Entities
+        # Specific Companies & Legal Entities
         for match in re.finditer(r'\b(?:Trilegal|KSH INTERNATIONAL LIMITED|Nuvama Wealth Management Limited|Kirtane & Pandit LLP|[A-Z][a-zA-Z\s&]+(?:Limited|Ltd|LLP|Inc|Corporation|Corp|Bank|Securities))\b', text):
             comp_str = match.group().strip()
             if comp_str.lower() not in self.stop_words:
@@ -220,11 +222,7 @@ class PIIRedactor:
                 raw_results.append(PIIItem("COMPANY", comp_str, start, end, score=0.95))
                 locked_spans.append((start, end))
 
-        # =========================================================================
-        # STAGE 2: CONTEXT & NAMED ENTITY RECOGNITION (UNLOCKED SPANS ONLY)
-        # =========================================================================
-
-        # Context Name Clues
+        # 2. Context Name Clues
         for match in re.finditer(r'(?:^|[\n,;])\s*(?:my name is|i am|this is|contact person|contact|user|customer|agent|Company Secretary|Lead Manager|Auditor|Legal Counsel)?[\s:]+([a-zA-Z]{2,20}(?:\s+[a-zA-Z]{2,20})?)(?=\s*[:\n,;.]|$)', text, re.IGNORECASE):
             name_str = match.group(1).strip()
             if name_str.lower() not in self.stop_words and len(name_str) >= 2:
@@ -233,7 +231,7 @@ class PIIRedactor:
                 if not any(s <= start and end <= e for s, e in locked_spans):
                     raw_results.append(PIIItem("PERSON", text[start:end], start, end, score=0.92))
 
-        # spaCy NER Pass
+        # 3. spaCy NER Pass
         doc = self.nlp(text)
         for ent in doc.ents:
             start, end = ent.start_char, ent.end_char
@@ -252,30 +250,32 @@ class PIIRedactor:
                     etype = "COMPANY"
                 raw_results.append(PIIItem(etype, entity_text, start, end, score=0.80))
 
-        # Word & Phrase Level Capitalization Check
-        for m in re.finditer(r'\b[a-zA-Z]{2,20}\s+[a-zA-Z]{2,20}\b', text):
-            phrase = m.group()
-            start, end = m.span()
-            if any(s <= start and end <= e for s, e in locked_spans):
-                continue
-            if phrase.lower() not in self.stop_words:
-                words = phrase.lower().split()
-                if not any(w in self.stop_words for w in words):
-                    p_doc = self.nlp(phrase.title())
-                    for ent in p_doc.ents:
-                        if ent.label_ == "PERSON":
-                            raw_results.append(PIIItem("PERSON", phrase, start, end, score=0.85))
+        # 4. Fast Word & Phrase Level Capitalization Check (only for short phrases e.g. < 8 words like ticket logs or single names)
+        words_list = text.split()
+        if len(words_list) <= 8:
+            for m in re.finditer(r'\b[a-zA-Z]{2,20}\s+[a-zA-Z]{2,20}\b', text):
+                phrase = m.group()
+                start, end = m.span()
+                if any(s <= start and end <= e for s, e in locked_spans):
+                    continue
+                if phrase.lower() not in self.stop_words:
+                    words = phrase.lower().split()
+                    if not any(w in self.stop_words for w in words):
+                        p_doc = self.nlp(phrase.title())
+                        for ent in p_doc.ents:
+                            if ent.label_ == "PERSON":
+                                raw_results.append(PIIItem("PERSON", phrase, start, end, score=0.85))
 
-        for m in re.finditer(r'\b[a-zA-Z]{3,20}\b', text):
-            word = m.group()
-            start, end = m.span()
-            if any(s <= start and end <= e for s, e in locked_spans):
-                continue
-            if word.lower() not in self.stop_words:
-                w_doc = self.nlp(word.capitalize())
-                for ent in w_doc.ents:
-                    if ent.label_ == "PERSON":
-                        raw_results.append(PIIItem("PERSON", word, start, end, score=0.82))
+            for m in re.finditer(r'\b[a-zA-Z]{3,20}\b', text):
+                word = m.group()
+                start, end = m.span()
+                if any(s <= start and end <= e for s, e in locked_spans):
+                    continue
+                if word.lower() not in self.stop_words:
+                    w_doc = self.nlp(word.capitalize())
+                    for ent in w_doc.ents:
+                        if ent.label_ == "PERSON":
+                            raw_results.append(PIIItem("PERSON", word, start, end, score=0.82))
 
         # Filter overlapping spans and remove non-PII stop words
         final_results: List[PIIItem] = []
