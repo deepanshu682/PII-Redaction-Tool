@@ -32,8 +32,8 @@ class PIIRedactor:
         try:
             self.nlp = spacy.load("en_core_web_sm")
         except Exception:
-            import subprocess
-            subprocess.run(["python", "-m", "spacy", "download", "en_core_web_sm"], check=True)
+            import spacy.cli
+            spacy.cli.download("en_core_web_sm")
             self.nlp = spacy.load("en_core_web_sm")
         
         # Configure Presidio
