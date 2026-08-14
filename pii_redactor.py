@@ -29,7 +29,12 @@ class PIIItem:
 class PIIRedactor:
     def __init__(self, mode: str = "SYNTHETIC"):
         self.mode = mode
-        self.nlp = spacy.load("en_core_web_sm")
+        try:
+            self.nlp = spacy.load("en_core_web_sm")
+        except Exception:
+            import subprocess
+            subprocess.run(["python", "-m", "spacy", "download", "en_core_web_sm"], check=True)
+            self.nlp = spacy.load("en_core_web_sm")
         
         # Configure Presidio
         configuration = {
