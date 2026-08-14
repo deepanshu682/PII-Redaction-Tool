@@ -126,7 +126,6 @@
             to { opacity: 1; transform: translateY(0); }
         }
 
-        /* Workbench Layout */
         .grid-2 {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -223,7 +222,6 @@
             box-shadow: 0 6px 20px rgba(99, 102, 241, 0.6);
         }
 
-        /* File Upload */
         .dropzone {
             border: 2px dashed rgba(99, 102, 241, 0.4);
             border-radius: 16px;
@@ -244,7 +242,6 @@
             margin-bottom: 1rem;
         }
 
-        /* Metric Cards */
         .metrics-grid {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
@@ -371,7 +368,7 @@
                         <option value="SYNTHETIC">Synthetic Replacement (Faker)</option>
                         <option value="MASK">Masking Tag ([REDACTED_TYPE])</option>
                     </select>
-                    <button class="btn btn-primary" onclick="uploadAndRedact()">Process & Download Redacted DOCX</button>
+                    <button id="uploadBtn" class="btn btn-primary" onclick="uploadAndRedact()">Process & Download Redacted File</button>
                 </div>
 
                 <div id="statusMessage" style="margin-top: 1rem; color: var(--accent-green); font-weight: 600; display: none;"></div>
@@ -412,7 +409,6 @@
                         </tr>
                     </thead>
                     <tbody id="metricsTableBody">
-                        <!-- Loaded dynamically -->
                     </tbody>
                 </table>
             </div>
@@ -463,7 +459,7 @@
         function handleFileSelect(e) {
             selectedFile = e.target.files[0];
             if (selectedFile) {
-                document.getElementById('fileName').innerText = `Selected: ${selectedFile.name}`;
+                document.getElementById('fileName').innerText = `Selected: ${selectedFile.name} (${(selectedFile.size / 1024).toFixed(1)} KB)`;
             }
         }
 
@@ -475,24 +471,39 @@
             formData.append('mode', mode);
 
             const statusEl = document.getElementById('statusMessage');
+            const uploadBtn = document.getElementById('uploadBtn');
             statusEl.style.display = 'block';
-            statusEl.innerText = "Processing redaction... Please wait...";
+            statusEl.style.color = '#38bdf8';
+            statusEl.innerText = "Processing document redaction... This may take a few seconds...";
+            uploadBtn.disabled = true;
 
-            const res = await fetch('/api/redact-file', {
-                method: 'POST',
-                body: formData
-            });
+            try {
+                const res = await fetch('/api/redact-file', {
+                    method: 'POST',
+                    body: formData
+                });
 
-            if (res.ok) {
-                const blob = await res.blob();
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `Redacted_${selectedFile.name}`;
-                a.click();
-                statusEl.innerText = "Redaction successful! Downloading file...";
-            } else {
-                statusEl.innerText = "Error processing file.";
+                if (res.ok) {
+                    const blob = await res.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `Redacted_${selectedFile.name}`;
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                    statusEl.style.color = '#10b981';
+                    statusEl.innerText = "✅ Redaction successful! Downloading redacted document...";
+                } else {
+                    const err = await res.json().catch(() => ({ detail: "Server error occurred" }));
+                    statusEl.style.color = '#f43f5e';
+                    statusEl.innerText = `❌ Error: ${err.detail || 'Could not process document'}`;
+                }
+            } catch (err) {
+                statusEl.style.color = '#f43f5e';
+                statusEl.innerText = `❌ Network Error: ${err.message}`;
+            } finally {
+                uploadBtn.disabled = false;
             }
         }
 

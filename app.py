@@ -4,8 +4,7 @@ Provides REST API endpoints and web UI for real-time PII redaction and document 
 """
 
 import os
-import shutil
-import tempfile
+import uuid
 from typing import Optional
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException
 from fastapi.responses import HTMLResponse, FileResponse, JSONResponse
@@ -24,6 +23,7 @@ app = FastAPI(
 
 # Serve static files
 os.makedirs("static", exist_ok=True)
+os.makedirs("temp_uploads", exist_ok=True)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Shared redactor instances
@@ -66,33 +66,38 @@ async def redact_file_endpoint(file: UploadFile = File(...), mode: str = Form("S
     redactor = redactor_mask if mode == "MASK" else redactor_synth
     docx_redactor = DOCXRedactor(redactor)
 
-    suffix = os.path.splitext(file.filename)[1].lower()
+    filename = file.filename or "document.docx"
+    suffix = os.path.splitext(filename)[1].lower()
     if suffix not in (".docx", ".txt"):
         raise HTTPException(status_code=400, detail="Only .docx and .txt files are supported.")
 
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_in:
-        shutil.copyfileobj(file.file, temp_in)
-        temp_in_path = temp_in.name
-
-    temp_out_path = temp_in_path.replace(suffix, f"_redacted{suffix}")
+    uid = uuid.uuid4().hex
+    temp_in_path = os.path.join("temp_uploads", f"in_{uid}{suffix}")
+    temp_out_path = os.path.join("temp_uploads", f"out_{uid}{suffix}")
 
     try:
+        content = await file.read()
+        with open(temp_in_path, "wb") as buffer:
+            buffer.write(content)
+
         if suffix == ".docx":
             docx_redactor.redact_document(temp_in_path, temp_out_path)
         else:
-            with open(temp_in_path, "r", encoding="utf-8") as f:
-                content = f.read()
-            redacted_content, _ = redactor.redact_text(content)
+            with open(temp_in_path, "r", encoding="utf-8", errors="ignore") as f:
+                raw_text = f.read()
+            redacted_content, _ = redactor.redact_text(raw_text)
             with open(temp_out_path, "w", encoding="utf-8") as f:
                 f.write(redacted_content)
 
         return FileResponse(
             path=temp_out_path,
-            filename=f"Redacted_{file.filename}",
+            filename=f"Redacted_{filename}",
             media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document" if suffix == ".docx" else "text/plain"
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Redaction failed: {str(e)}")
 
 @app.get("/api/evaluation-metrics")
 async def get_evaluation_metrics():

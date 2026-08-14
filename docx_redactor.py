@@ -1,6 +1,6 @@
 """
 docx_redactor.py - Structure-Preserving DOCX Redactor
-Redacts PII across paragraphs, tables, headers, and footers in Microsoft Word documents.
+Redacts PII across paragraphs, tables, headers, and footers in Microsoft Word documents with cell caching.
 """
 
 import docx
@@ -12,6 +12,7 @@ class DOCXRedactor:
         self.redactor = redactor
         self.stats: Dict[str, int] = {}
         self.total_replacements = 0
+        self.text_cache: Dict[str, Tuple[str, List[PIIItem]]] = {}
 
     def _redact_paragraph(self, p: docx.text.paragraph.Paragraph) -> int:
         """Redact PII in a single paragraph while preserving styling."""
@@ -19,7 +20,13 @@ class DOCXRedactor:
             return 0
 
         original_text = p.text
-        redacted_text, entities = self.redactor.redact_text(original_text)
+
+        # Check cache
+        if original_text in self.text_cache:
+            redacted_text, entities = self.text_cache[original_text]
+        else:
+            redacted_text, entities = self.redactor.redact_text(original_text)
+            self.text_cache[original_text] = (redacted_text, entities)
 
         if not entities or redacted_text == original_text:
             return 0
@@ -44,6 +51,7 @@ class DOCXRedactor:
         doc = docx.Document(input_docx_path)
         self.stats = {}
         self.total_replacements = 0
+        self.text_cache = {}
 
         # 1. Redact Body Paragraphs
         for p in doc.paragraphs:
@@ -79,13 +87,3 @@ class DOCXRedactor:
         # Save redacted document
         doc.save(output_docx_path)
         return self.stats
-
-if __name__ == "__main__":
-    redactor = PIIRedactor(mode="SYNTHETIC")
-    docx_redactor = DOCXRedactor(redactor)
-    stats = docx_redactor.redact_document("Red Herring Prospectus.docx", "Red_Herring_Prospectus_Redacted.docx")
-    print("\n=== DOCX REDACTION COMPLETE ===")
-    print(f"Total PII Replacements: {docx_redactor.total_replacements}")
-    print("Breakdown by entity type:")
-    for etype, count in stats.items():
-        print(f" - {etype}: {count}")
