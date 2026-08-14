@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PII Redaction & Anonymization Hub</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-dark: #0f172a;
+            --card-bg: rgba(30, 41, 59, 0.7);
+            --border-color: rgba(255, 255, 255, 0.1);
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
+            --accent-cyan: #06b6d4;
+            --accent-green: #10b981;
+            --accent-pink: #ec4899;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(6, 182, 212, 0.15) 0px, transparent 50%);
+        }
+
+        header {
+            padding: 1.5rem 2rem;
+            border-bottom: 1px solid var(--border-color);
+            backdrop-filter: blur(12px);
+            background: rgba(15, 23, 42, 0.8);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .logo-group {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--primary), var(--accent-cyan));
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 1.2rem;
+            color: white;
+            box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+        }
+
+        .logo-title {
+            font-size: 1.25rem;
+            font-weight: 700;
+            background: linear-gradient(to right, #fff, #94a3b8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .nav-tabs {
+            display: flex;
+            gap: 0.5rem;
+            background: rgba(2, 6, 23, 0.5);
+            padding: 0.25rem;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+        }
+
+        .nav-tab {
+            padding: 0.5rem 1.25rem;
+            border-radius: 8px;
+            border: none;
+            background: transparent;
+            color: var(--text-muted);
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .nav-tab.active {
+            background: var(--primary);
+            color: white;
+            box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+        }
+
+        main {
+            flex: 1;
+            padding: 2rem;
+            max-width: 1400px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Workbench Layout */
+        .grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 1.5rem;
+            backdrop-filter: blur(16px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .card-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-main);
+        }
+
+        textarea {
+            width: 100%;
+            height: 320px;
+            background: rgba(2, 6, 23, 0.6);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 1rem;
+            color: var(--text-main);
+            font-family: monospace;
+            font-size: 0.95rem;
+            resize: vertical;
+            outline: none;
+        }
+
+        textarea:focus {
+            border-color: var(--primary);
+        }
+
+        .output-box {
+            width: 100%;
+            height: 320px;
+            background: rgba(2, 6, 23, 0.6);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 1rem;
+            color: var(--accent-green);
+            font-family: monospace;
+            font-size: 0.95rem;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+
+        .controls-bar {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+            margin-top: 1rem;
+        }
+
+        select, .btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: 10px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            font-size: 0.95rem;
+        }
+
+        select {
+            background: rgba(15, 23, 42, 0.9);
+            color: white;
+            border: 1px solid var(--border-color);
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), var(--primary-hover));
+            color: white;
+            border: none;
+            box-shadow: 0 4px 14px rgba(99, 102, 241, 0.4);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(99, 102, 241, 0.6);
+        }
+
+        /* File Upload */
+        .dropzone {
+            border: 2px dashed rgba(99, 102, 241, 0.4);
+            border-radius: 16px;
+            padding: 3rem 2rem;
+            text-align: center;
+            background: rgba(30, 41, 59, 0.4);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .dropzone:hover {
+            border-color: var(--accent-cyan);
+            background: rgba(6, 182, 212, 0.05);
+        }
+
+        .dropzone-icon {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+        }
+
+        /* Metric Cards */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .metric-card {
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            padding: 1.5rem;
+            text-align: center;
+        }
+
+        .metric-value {
+            font-size: 2.2rem;
+            font-weight: 700;
+            margin-top: 0.5rem;
+            background: linear-gradient(to right, var(--accent-cyan), var(--accent-green));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .metric-label {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.6rem;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            margin-right: 0.4rem;
+            margin-bottom: 0.4rem;
+        }
+
+        .badge-PERSON { background: rgba(236, 72, 153, 0.2); color: #f472b6; border: 1px solid rgba(236, 72, 153, 0.4); }
+        .badge-EMAIL { background: rgba(6, 182, 212, 0.2); color: #38bdf8; border: 1px solid rgba(6, 182, 212, 0.4); }
+        .badge-PHONE { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.4); }
+        .badge-COMPANY { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.4); }
+        .badge-ADDRESS { background: rgba(139, 92, 246, 0.2); color: #a78bfa; border: 1px solid rgba(139, 92, 246, 0.4); }
+
+        footer {
+            text-align: center;
+            padding: 1.5rem;
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            border-top: 1px solid var(--border-color);
+            margin-top: auto;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo-group">
+            <div class="logo-icon">P</div>
+            <div class="logo-title">PII Redaction & Anonymization Hub</div>
+        </div>
+        <div class="nav-tabs">
+            <button class="nav-tab active" onclick="switchTab('workbench')">Text Workbench</button>
+            <button class="nav-tab" onclick="switchTab('file-redactor')">DOCX Redactor</button>
+            <button class="nav-tab" onclick="switchTab('analytics')">Evaluation & Analytics</button>
+        </div>
+    </header>
+
+    <main>
+
+        <!-- TAB 1: TEXT WORKBENCH -->
+        <div id="workbench" class="tab-content active">
+            <div class="grid-2">
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">Input Raw Text</span>
+                        <button class="btn btn-primary" style="padding: 0.4rem 1rem; font-size: 0.85rem;" onclick="loadSampleText()">Load Sample Prospectus</button>
+                    </div>
+                    <textarea id="inputText" placeholder="Paste ticket log or prospectus text with PII here..."></textarea>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <span class="card-title">Redacted Output</span>
+                        <span id="detectedCount" class="card-title" style="color: var(--accent-green); font-size: 0.9rem;">0 Entities Detected</span>
+                    </div>
+                    <div id="outputText" class="output-box">Redacted output will appear here after clicking 'Redact PII'...</div>
+                </div>
+            </div>
+
+            <div class="controls-bar">
+                <label style="color: var(--text-muted); font-weight: 500;">Redaction Mode:</label>
+                <select id="modeSelect">
+                    <option value="SYNTHETIC">Synthetic Replacement (Faker)</option>
+                    <option value="MASK">Masking Tag ([REDACTED_TYPE])</option>
+                </select>
+                <button class="btn btn-primary" onclick="processRedaction()">Redact PII Now</button>
+            </div>
+
+            <div class="card" style="margin-top: 1.5rem;">
+                <span class="card-title">Detected Entities Mapping</span>
+                <div id="entityBadges" style="margin-top: 0.5rem;">No entities detected yet.</div>
+            </div>
+        </div>
+
+        <!-- TAB 2: DOCX REDACTOR -->
+        <div id="file-redactor" class="tab-content">
+            <div class="card">
+                <span class="card-title">Upload & Redact DOCX Document</span>
+                <p style="color: var(--text-muted); font-size: 0.9rem;">Upload 'Red Herring Prospectus.docx' or any document to redact PII while preserving formatting and tables.</p>
+                
+                <div class="dropzone" onclick="document.getElementById('fileInput').click()">
+                    <div class="dropzone-icon">📄</div>
+                    <p style="font-weight: 600;">Click or Drag & Drop DOCX File Here</p>
+                    <p id="fileName" style="color: var(--accent-cyan); margin-top: 0.5rem; font-size: 0.9rem;"></p>
+                    <input type="file" id="fileInput" accept=".docx,.txt" style="display: none;" onchange="handleFileSelect(event)">
+                </div>
+
+                <div class="controls-bar" style="margin-top: 1.5rem;">
+                    <label style="color: var(--text-muted); font-weight: 500;">Redaction Mode:</label>
+                    <select id="fileModeSelect">
+                        <option value="SYNTHETIC">Synthetic Replacement (Faker)</option>
+                        <option value="MASK">Masking Tag ([REDACTED_TYPE])</option>
+                    </select>
+                    <button class="btn btn-primary" onclick="uploadAndRedact()">Process & Download Redacted DOCX</button>
+                </div>
+
+                <div id="statusMessage" style="margin-top: 1rem; color: var(--accent-green); font-weight: 600; display: none;"></div>
+            </div>
+        </div>
+
+        <!-- TAB 3: ANALYTICS & EVALUATION -->
+        <div id="analytics" class="tab-content">
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <div class="metric-label">Precision</div>
+                    <div class="metric-value" id="precisionVal">100%</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Recall</div>
+                    <div class="metric-value" id="recallVal">100%</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">F1-Score</div>
+                    <div class="metric-value" id="f1Val">100%</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Total Prospectus PII</div>
+                    <div class="metric-value" id="totalProspectusPii">6,868</div>
+                </div>
+            </div>
+
+            <div class="card">
+                <span class="card-title">Per-Entity Performance Metrics</span>
+                <table style="width: 100%; border-collapse: collapse; margin-top: 1rem; color: var(--text-main);">
+                    <thead>
+                        <tr style="border-bottom: 1px solid var(--border-color); text-align: left;">
+                            <th style="padding: 0.75rem;">PII Entity Category</th>
+                            <th style="padding: 0.75rem;">Precision</th>
+                            <th style="padding: 0.75rem;">Recall</th>
+                            <th style="padding: 0.75rem;">F1-Score</th>
+                            <th style="padding: 0.75rem;">Detection Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="metricsTableBody">
+                        <!-- Loaded dynamically -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </main>
+
+    <footer>
+        PII Redaction Tool &copy; 2026 | Enterprise Anonymization Architecture
+    </footer>
+
+    <script>
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.nav-tab').forEach(el => el.classList.remove('active'));
+            document.getElementById(tabId).classList.add('active');
+            event.target.classList.add('active');
+            if (tabId === 'analytics') loadAnalytics();
+        }
+
+        function loadSampleText() {
+            document.getElementById('inputText').value = `Rashi Patil (email: rashi.patil@gmail.com, phone: +91 9876543210) works at KSH International Limited (CIN: U28129PN1979PLC141032) located at Gat No. 433, Village Mahalunge, Taluka Khed, District Pune 410 501, Maharashtra, India. Contact: Rohan Dey (rohan.dey@gmail.com). Customer SSN: 123-45-6789, Credit Card: 4532-0154-9821-3304, DOB: October 15, 1985.`;
+        }
+
+        async function processRedaction() {
+            const text = document.getElementById('inputText').value;
+            const mode = document.getElementById('modeSelect').value;
+            if (!text.trim()) return alert("Please enter text to redact.");
+
+            const res = await fetch('/api/redact-text', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text, mode })
+            });
+
+            const data = await res.json();
+            document.getElementById('outputText').innerText = data.redacted_text;
+            document.getElementById('detectedCount').innerText = `${data.entities.length} Entities Detected`;
+
+            let badgesHtml = '';
+            data.entities.forEach(ent => {
+                badgesHtml += `<span class="badge badge-${ent.entity_type}">[${ent.entity_type}] '${ent.text}' ➔ '${ent.replacement}'</span>`;
+            });
+            document.getElementById('entityBadges').innerHTML = badgesHtml || 'No PII entities detected.';
+        }
+
+        let selectedFile = null;
+        function handleFileSelect(e) {
+            selectedFile = e.target.files[0];
+            if (selectedFile) {
+                document.getElementById('fileName').innerText = `Selected: ${selectedFile.name}`;
+            }
+        }
+
+        async function uploadAndRedact() {
+            if (!selectedFile) return alert("Please select a file first.");
+            const mode = document.getElementById('fileModeSelect').value;
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+            formData.append('mode', mode);
+
+            const statusEl = document.getElementById('statusMessage');
+            statusEl.style.display = 'block';
+            statusEl.innerText = "Processing redaction... Please wait...";
+
+            const res = await fetch('/api/redact-file', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (res.ok) {
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `Redacted_${selectedFile.name}`;
+                a.click();
+                statusEl.innerText = "Redaction successful! Downloading file...";
+            } else {
+                statusEl.innerText = "Error processing file.";
+            }
+        }
+
+        async function loadAnalytics() {
+            const res = await fetch('/api/evaluation-metrics');
+            const data = await res.json();
+            const ov = data.overall;
+
+            document.getElementById('precisionVal').innerText = `${(ov.Precision * 100).toFixed(1)}%`;
+            document.getElementById('recallVal').innerText = `${(ov.Recall * 100).toFixed(1)}%`;
+            document.getElementById('f1Val').innerText = `${(ov.F1_Score * 100).toFixed(1)}%`;
+
+            let rows = '';
+            for (const [etype, m] of Object.entries(data.per_entity_type)) {
+                rows += `
+                    <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                        <td style="padding: 0.75rem; font-weight: 600; color: var(--accent-cyan);">${etype}</td>
+                        <td style="padding: 0.75rem;">${(m.Precision * 100).toFixed(1)}%</td>
+                        <td style="padding: 0.75rem;">${(m.Recall * 100).toFixed(1)}%</td>
+                        <td style="padding: 0.75rem;">${(m.F1_Score * 100).toFixed(1)}%</td>
+                        <td style="padding: 0.75rem;"><span style="color: var(--accent-green);">● Active Recognizer</span></td>
+                    </tr>
+                `;
+            }
+            document.getElementById('metricsTableBody').innerHTML = rows;
+        }
+    </script>
+</body>
+</html>
